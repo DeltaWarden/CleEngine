@@ -1,88 +1,56 @@
-from typing import Dict, Tuple
-import time
-
-class SceneObject:
-    def __init__(self, name: str, obj_type: str, position: Tuple[float, float, float], scale: Tuple[float, float, float]):
-        self.name = name
-        self.type = obj_type
-        self.position = position
-        self.scale = scale
-
-    def move_to(self, new_pos: Tuple[float, float, float]):
-        self.position = new_pos
-
-    def __repr__(self):
-        return f"<{self.type} '{self.name}': Pos={self.position}, Scale={self.scale}>"
+from sceneSet import SceneObject
+import math
 
 class CleParser:
     def __init__(self):
-        self.objects: Dict[str, SceneObject] = {}
+        self.objects = {}
 
-    def parse_line(self, line: str):
-        line = line.split('#')[0].strip()
-        if not line:
-            return
-
-        parts = line.split()
-        cmd = parts[0].upper()
-
-        if cmd == "CREATE":
-            # CREATE <name> TYPE <type / default: Cube> POSITION <x> <y> <z> SCALE <sx> <sy> <sz>
-            if len(parts) < 12:
-                print(f"Ошибка: слишком короткая команда CREATE: {line}")
-                return
-            try:
-                name = parts[1]
-                assert parts[2].upper() == "TYPE"
-                obj_type = parts[3]
-                assert parts[4].upper() == "POSITION"
-                pos = tuple(map(float, parts[5:8]))
-                assert parts[8].upper() == "SCALE"
-                scale = tuple(map(float, parts[9:12]))
-            except (AssertionError, ValueError):
-                print(f"Ошибка синтаксиса или парсинга CREATE: {line}")
-                return
-
-            obj = SceneObject(name, obj_type, pos, scale)
-            self.objects[name] = obj
-            print(f"Создан объект: {obj}")
-
-        elif cmd == "MOVE":
-            # MOVE <name> TO <x> <y> <z>
-            if len(parts) != 6:
-                print(f"Ошибка: команде MOVE нужно 5 аргументов: {line}")
-                return
-            name = parts[1]
-            if name not in self.objects:
-                print(f"Ошибка: объект {name} не найден для MOVE")
-                return
-            if parts[2].upper() != "TO":
-                print(f"Ошибка синтаксиса MOVE: ожидалось TO: {line}")
-                return
-            try:
-                target_pos = tuple(float(x) for x in parts[3:6])
-            except ValueError:
-                print(f"Ошибка парсинга координат MOVE: {line}")
-                return
-
-            obj = self.objects[name]
-            obj.move_to(target_pos)
-            print(f"Объект {name} перемещён к {target_pos}")
-
-    def parse_file(self, filepath: str):
+    def parse_file(self, filepath):
         with open(filepath, 'r') as f:
             for line in f:
                 self.parse_line(line)
 
+    def parse_line(self, line):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return
+        parts = line.split()
+        if parts[0].upper() == "CREATE":
+            self.parse_create_command(parts[1:])
+
+    def parse_create_command(self, parts):
+        if len(parts) < 8:
+            return
+        
+        name = parts[0]
+        obj_type = parts[2]
+        pos = tuple(map(float, parts[4:7]))
+        scale = tuple(map(float, parts[8:11]))
+        
+        color = (1.0, 1.0, 1.0)
+        texture = None
+        material = "default"
+        emissive = 0.0
+        
+        i = 11
+        while i < len(parts):
+            if parts[i].upper() == "COLOR" and i + 3 < len(parts):
+                color = tuple(map(float, parts[i+1:i+4]))
+                i += 4
+            elif parts[i].upper() == "TEXTURE" and i + 1 < len(parts):
+                texture = parts[i+1]
+                i += 2
+            elif parts[i].upper() == "MATERIAL" and i + 1 < len(parts):
+                material = parts[i+1]
+                i += 2
+            elif parts[i].upper() == "EMISSIVE" and i + 1 < len(parts):
+                emissive = float(parts[i+1])
+                i += 2
+            else:
+                i += 1
+        
+        obj = SceneObject(name, obj_type, pos, scale, color, texture, material, emissive)
+        self.objects[name] = obj
+
     def get_objects(self):
         return self.objects
-
-def main():
-    parser = CleParser()
-    while True:
-        for obj in parser.get_objects().values():
-            print(f"Текущий объект: {obj}")
-        time.sleep(1)
-
-if __name__ == "__main__":
-    main()
